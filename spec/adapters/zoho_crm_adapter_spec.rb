@@ -94,6 +94,17 @@ RSpec.describe Etlify::Adapters::ZohoCrmAdapter do
     end
   end
 
+  describe "#inspect" do
+    it "does not reveal credentials, even once a token is held", :aggregate_failures do
+      expect(http).to receive(:request).with(:delete, "#{api}/Contacts/100", headers: anything, body: nil)
+        .and_return({status: 200, body: {data: [zoho_success("100")]}.to_json})
+      adapter.delete!(object_type: "Contacts", crm_id: "100")
+
+      expect(adapter.inspect).to include("https://www.zohoapis.com/crm/v8")
+      expect(adapter.inspect).not_to include("client-secret", "refresh-token", "tok-1")
+    end
+  end
+
   describe "#upsert!" do
     it "upserts on the match field when crm_id is unknown", :aggregate_failures do
       expect(http).to receive(:request).with(

@@ -68,6 +68,12 @@ module Etlify
           end
         end
 
+        # The default inspect would print the client secret, the refresh token
+        # and the current token, e.g. in a console or an error report.
+        def inspect
+          "#<#{self.class.name} accounts_url=#{@accounts_url.inspect} client_id=#{@client_id.inspect}>"
+        end
+
         private
 
         def fresh?

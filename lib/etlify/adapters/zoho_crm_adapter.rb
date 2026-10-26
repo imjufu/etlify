@@ -107,6 +107,12 @@ module Etlify
         )
       end
 
+      # Keeps the credentials held by the access token out of consoles, logs
+      # and error reports.
+      def inspect
+        "#<#{self.class.name} api_base=#{@api_base.inspect}>"
+      end
+
       # Update by crm_id when known, otherwise upsert on match_property.
       # @param object_type [String] Zoho module API name
       # @param payload [Hash] Fields keyed by API name, synced as-is

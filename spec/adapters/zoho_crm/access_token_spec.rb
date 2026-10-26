@@ -123,6 +123,16 @@ RSpec.describe Etlify::Adapters::ZohoCrm::AccessToken do
     end
   end
 
+  describe "#inspect" do
+    it "does not reveal the secret, the refresh token or the current token", :aggregate_failures do
+      expect(http).to receive(:request).and_return(token_response("tok-1"))
+      access_token.value
+
+      expect(access_token.inspect).to include("client-id")
+      expect(access_token.inspect).not_to include("client-secret", "refresh-token", "tok-1")
+    end
+  end
+
   describe "#invalidate!" do
     let(:cache) { ActiveSupport::Cache::MemoryStore.new }
 
