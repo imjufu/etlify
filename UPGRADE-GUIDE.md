@@ -1,3 +1,61 @@
+# UPGRADING FROM 0.15.1 -> 0.16.0
+
+## 1. Overview
+
+No API change, no configuration change, no migration. This release adds a new
+adapter, `Etlify::Adapters::ZohoCrmAdapter`, for the Zoho CRM REST API (v8 by
+default). Applications that do not use Zoho are unaffected.
+
+---
+
+## 2. Database migrations
+
+No database migration required for this upgrade.
+
+---
+
+## 3. Configuration changes
+
+Nothing to change for existing CRMs. To sync with Zoho, register the adapter
+with an OAuth refresh token (see the README, "Zoho CRM adapter"):
+
+```ruby
+Etlify::CRM.register(
+  :zoho,
+  adapter: Etlify::Adapters::ZohoCrmAdapter.new(
+    client_id: ENV["ZOHO_CLIENT_ID"],
+    client_secret: ENV["ZOHO_CLIENT_SECRET"],
+    refresh_token: ENV["ZOHO_REFRESH_TOKEN"],
+    data_center: :eu
+  )
+)
+```
+
+- `crm_object_type:` is the module API name (`"Contacts"`, `"Leads"`, a custom
+  module).
+- The `match_by` property must be a field Zoho accepts as a duplicate check
+  field (a system unique field such as `Email`, or a custom field marked "Do
+  not allow duplicate values"). Matching goes through Zoho's native upsert, not
+  the search API.
+- Access tokens are shared across processes through `Etlify.config.cache_store`.
+  Use a store shared by every worker (Redis, Memcached) in production, or pass
+  `token_cache:` to the adapter to pick another one.
+
+---
+
+## 4. Expected behaviour after upgrading
+
+Identical for HubSpot, Airtable and Intercom.
+
+---
+
+## 5. Backward compatibility
+
+- No public API change, no DSL change, no migration.
+- The new adapter is loaded with the others but does nothing until registered.
+
+---
+
 # UPGRADING FROM 0.15.0 -> 0.15.1
 
 ## 1. Overview
