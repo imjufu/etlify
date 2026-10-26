@@ -312,7 +312,7 @@ user = User.find(1)
 
 # Async by default (enqueues an Etlify::SyncJob by default)
 # The job class can be overriden when registering the CRM
-user.hubspot_crm_sync! # or user.#{registered_crm_name}_crm_sync!
+user.hubspot_sync! # or user.#{registered_crm_name}_sync!
 
 # Run inline (no job)
 user.crm_sync!(async: false)
@@ -322,7 +322,7 @@ user.crm_sync!(async: false)
 
 ```ruby
 # Inline delete (not enqueued)
-user.hubspot_crm_delete! # or user.#{registered_crm_name}_crm_delete!
+user.hubspot_delete! # or user.#{registered_crm_name}_delete!
 ```
 
 ### Custom serializer example
@@ -567,7 +567,7 @@ class User < ApplicationRecord
 end
 
 # Later
-user.hubspot_crm_sync! # Adapter performs an upsert
+user.hubspot_sync! # Adapter performs an upsert
 ```
 
 ### Example: Custom object
@@ -656,7 +656,7 @@ class User < ApplicationRecord
 end
 
 # Later
-user.airtable_crm_sync!
+user.airtable_sync!
 ```
 
 ### Batch operations
@@ -733,7 +733,7 @@ class User < ApplicationRecord
 end
 
 # Later
-user.intercom_crm_sync!
+user.intercom_sync!
 ```
 
 ### Example: company upsert by company_id
@@ -800,7 +800,7 @@ end
 ### Behaviour
 
 - `match_by`: records without a `crm_id` go through Zoho's native `POST /{module}/upsert` with the matching property as the only `duplicate_check_fields`. Zoho finds the existing record **server side**. The adapter deliberately avoids the search API, whose index lags behind writes: a record created a moment earlier would not be found and would be created twice.
-- The matching property must therefore be a field Zoho accepts as a duplicate check field: a system unique field (`Email` on Contacts and Leads, `Account_Name` on Accounts, …) or a custom field marked **"Do not allow duplicate values"**. Otherwise Zoho rejects the call with a `ValidationFailed` error.
+- The matching property must therefore be a field Zoho accepts as a duplicate check field: a system unique field (`Email` on Contacts and Leads, `Account_Name` on Accounts, …) or a custom field marked **"Do not allow duplicate values"**. Otherwise Zoho rejects the call: `ValidationFailed` when the refusal comes as a record entry inside `data`, or the class matching the HTTP status (usually `ApiError`) when Zoho rejects the request as a whole. In a batch, both send `BatchSyncJob` to its sequential fallback.
 - The payload is synced as-is. Because the upsert endpoint reads the duplicate check value from the record, the matching value is injected into the record when the payload does not carry it (as with Airtable). On a matched record, Zoho rewrites the field with the value it was matched on.
 - `crm_id`: if known, the adapter skips matching and `PUT`s on `/{module}/{crm_id}`.
 - Batch operations use the native endpoints, 100 records per call (auto-sliced): `batch_upsert!` (`POST /{module}/upsert`), `batch_update!` (`PUT /{module}`), `batch_delete!` (`DELETE /{module}?ids=…`).
@@ -820,7 +820,7 @@ class User < ApplicationRecord
 end
 
 # Later
-user.zoho_crm_sync!
+user.zoho_sync!
 ```
 
 ### Errors
