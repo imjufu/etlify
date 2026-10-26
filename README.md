@@ -215,7 +215,9 @@ end
 When a record fails to sync repeatedly (CRM misconfigured, server error, etc.),
 Etlify increments an `error_count` on its `CrmSynchronisation` row. Once the
 count reaches the configured limit, the record is **excluded** from
-`StaleRecords::Finder` automatic retries.
+`StaleRecords::Finder` automatic retries. `Etlify::RateLimited` is never
+counted: it is re-raised so the job retries later (`SyncJob` through
+`retry_on`, `BatchSyncJob` by re-enqueuing the remaining records).
 
 The default limit is **3**. You can change it globally or per CRM:
 
@@ -834,7 +836,7 @@ Zoho reports failures **per record**, inside `data`, sometimes behind a 2xx stat
 | other 4xx/5xx | `Etlify::ApiError`       |
 | transport   | `Etlify::TransportError`   |
 
-A failed token refresh raises `Etlify::Unauthorized` (or `RateLimited` / `ApiError` on 429 / 5xx). `delete!` returns `false` when the record does not exist (`INVALID_DATA` or 404), and `batch_delete!` treats such ids as already deleted.
+A failed token refresh raises `Etlify::Unauthorized` (or `RateLimited` / `ApiError` on 429 / 5xx). Exceeding Zoho's quota of 10 refreshes per 10 minutes per refresh token (`{"error": "Access Denied"}` behind a 200) raises `RateLimited`. `delete!` returns `false` when the record does not exist (`INVALID_DATA` or 404), and `batch_delete!` treats such ids as already deleted.
 
 ---
 

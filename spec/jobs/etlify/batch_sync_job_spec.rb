@@ -277,6 +277,36 @@ RSpec.describe Etlify::BatchSyncJob do
 
       Etlify::CRM.registry.delete(:seq_crm)
     end
+
+    it "re-enqueues without bumping error_count when the adapter is rate limited in sequential mode",
+       :aggregate_failures do
+      rate_limited_adapter = Object.new
+      rate_limited_adapter.define_singleton_method(:upsert!) do |**_|
+        raise Etlify::RateLimited.new("rate limited", status: 429)
+      end
+      rate_limited_adapter.define_singleton_method(:delete!) { |**_| true }
+
+      Etlify::CRM.register(:seq_crm, adapter: rate_limited_adapter)
+      allow(User).to receive(:etlify_crms).and_return(
+        {
+          seq_crm: {
+            adapter: rate_limited_adapter,
+            match_by: {property: :email, value: :email},
+            crm_object_type: "contacts",
+          },
+        }
+      )
+
+      user = create_user!(index: 1)
+
+      described_class.perform_now("seq_crm", ["User", user.id])
+
+      jobs = aj_enqueued_jobs.select { |j| j[:job] == described_class }
+      expect(jobs.size).to eq(1)
+      expect(CrmSynchronisation.find_by(resource: user, crm_name: "seq_crm")&.error_count.to_i).to eq(0)
+
+      Etlify::CRM.registry.delete(:seq_crm)
+    end
   end
 
   describe "sequential mode error handling" do

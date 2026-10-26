@@ -16,6 +16,7 @@ module Etlify
         TOKEN_PATH = "/oauth/v2/token"
         # Refresh ahead of the real expiry so a token never dies in flight.
         EXPIRY_MARGIN = 300
+        REFRESH_QUOTA_EXCEEDED_ERROR = "Access Denied"
 
         # @param accounts_url [String] Zoho Accounts server of the data center
         # @param client_id [String]
@@ -117,6 +118,8 @@ module Etlify
         # Any failure short of 429 / 5xx is reported as Unauthorized: it says
         # nothing about the record being synced, so it must never be taken
         # for a per-record error that the batch synchronizer would isolate.
+        # "Access Denied" is Zoho's quota of 10 refreshes per 10 minutes per
+        # refresh token: transient, so it is retried later like a 429.
         def raise_refresh_error!(response, json)
           status = response[:status].to_i
           code = json.is_a?(Hash) ? json["error"] : nil
@@ -125,7 +128,7 @@ module Etlify
           message << ")"
 
           klass =
-            if status == 429
+            if status == 429 || code == REFRESH_QUOTA_EXCEEDED_ERROR
               Etlify::RateLimited
             elsif status >= 500
               Etlify::ApiError

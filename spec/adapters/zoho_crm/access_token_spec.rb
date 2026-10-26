@@ -71,6 +71,12 @@ RSpec.describe Etlify::Adapters::ZohoCrm::AccessToken do
       expect { access_token.value }.to raise_error(Etlify::Unauthorized, /error=invalid_code/)
     end
 
+    it "raises RateLimited when the refresh quota is exceeded" do
+      expect(http).to receive(:request).and_return({status: 200, body: {error: "Access Denied"}.to_json})
+
+      expect { access_token.value }.to raise_error(Etlify::RateLimited, /error=Access Denied/)
+    end
+
     it "raises Unauthorized on a 4xx without JSON body" do
       expect(http).to receive(:request).and_return({status: 400, body: "<html>Access Denied</html>"})
 

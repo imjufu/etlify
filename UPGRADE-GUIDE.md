@@ -4,7 +4,12 @@
 
 No API change, no configuration change, no migration. This release adds a new
 adapter, `Etlify::Adapters::ZohoCrmAdapter`, for the Zoho CRM REST API (v8 by
-default). Applications that do not use Zoho are unaffected.
+default).
+
+One behavior change applies to every CRM: `Etlify::Synchronizer` no longer
+records `Etlify::RateLimited` as a record error. It re-raises it, so `SyncJob`
+retries through `retry_on` and `BatchSyncJob` re-enqueues the remaining records,
+and a rate-limit window can no longer push records past `max_sync_errors`.
 
 ---
 
