@@ -16,6 +16,11 @@ module Etlify
         TOKEN_PATH = "/oauth/v2/token"
         # Refresh ahead of the real expiry so a token never dies in flight.
         EXPIRY_MARGIN = 300
+        # The cached expiry is shared, so without a per-process offset every
+        # process would judge the token stale at the same second and refresh
+        # concurrently, burning the refresh quota. With it, the earliest
+        # process refreshes and the others find the new token in the cache.
+        MAX_REFRESH_OFFSET = 120
         REFRESH_QUOTA_EXCEEDED_ERROR = "Access Denied"
 
         # @param accounts_url [String] Zoho Accounts server of the data center
@@ -26,16 +31,17 @@ module Etlify
         # @param cache [ActiveSupport::Cache::Store, nil] store shared across
         #   processes; nil keeps the token in this process only
         def initialize(accounts_url:, client_id:, client_secret:, refresh_token:, http:, cache:)
-          @accounts_url  = accounts_url
-          @client_id     = client_id
-          @client_secret = client_secret
-          @refresh_token = refresh_token
-          @http          = http
-          @cache         = cache
-          @cache_key     = "etlify:zoho_crm:access_token:#{OpenSSL::Digest::SHA256.hexdigest(refresh_token)}"
-          @mutex         = Mutex.new
-          @token         = nil
-          @expires_at    = 0
+          @accounts_url   = accounts_url
+          @client_id      = client_id
+          @client_secret  = client_secret
+          @refresh_token  = refresh_token
+          @http           = http
+          @cache          = cache
+          @cache_key      = "etlify:zoho_crm:access_token:#{OpenSSL::Digest::SHA256.hexdigest(refresh_token)}"
+          @mutex          = Mutex.new
+          @token          = nil
+          @expires_at     = 0
+          @refresh_offset = Random.rand(0..MAX_REFRESH_OFFSET)
         end
 
         # @return [String] a token valid for at least EXPIRY_MARGIN seconds
@@ -65,7 +71,7 @@ module Etlify
         private
 
         def fresh?
-          !@token.nil? && Time.now.to_f < @expires_at
+          !@token.nil? && Time.now.to_f < @expires_at - @refresh_offset
         end
 
         def load_from_cache!

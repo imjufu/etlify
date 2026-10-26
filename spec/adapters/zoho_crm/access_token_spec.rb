@@ -63,6 +63,25 @@ RSpec.describe Etlify::Adapters::ZohoCrm::AccessToken do
         expect(access_token.value).to eq("tok-1")
         expect(build_access_token(cache: cache).value).to eq("tok-1")
       end
+
+      it "lets the process with the earliest offset refresh for the others" do
+        expect(Random).to receive(:rand).with(0..described_class::MAX_REFRESH_OFFSET).and_return(0, 120)
+        expect(http).to receive(:request).twice.and_return(token_response("tok-1"), token_response("tok-2"))
+        late_process = build_access_token(cache: cache)
+        early_process = build_access_token(cache: cache)
+
+        Timecop.freeze(Time.now) do
+          expect(late_process.value).to eq("tok-1")
+          expect(early_process.value).to eq("tok-1")
+
+          Timecop.travel(Time.now + 3600 - described_class::EXPIRY_MARGIN - 120 + 1)
+          expect(early_process.value).to eq("tok-2")
+          expect(late_process.value).to eq("tok-1")
+
+          Timecop.travel(Time.now + 120)
+          expect(late_process.value).to eq("tok-2")
+        end
+      end
     end
 
     it "raises Unauthorized when Zoho rejects the refresh token with a 200" do
