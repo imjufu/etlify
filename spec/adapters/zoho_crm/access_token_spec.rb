@@ -84,6 +84,27 @@ RSpec.describe Etlify::Adapters::ZohoCrm::AccessToken do
       end
     end
 
+    context "when expires_in is missing or zero" do
+      let(:cache) { ActiveSupport::Cache::MemoryStore.new }
+
+      it "keeps the token for an hour, in memory and in the cache", :aggregate_failures do
+        expect(http).to receive(:request).twice.and_return(
+          {status: 200, body: {access_token: "tok-1"}.to_json},
+          token_response("tok-2", expires_in: 0)
+        )
+
+        Timecop.freeze(Time.now) do
+          expect(access_token.value).to eq("tok-1")
+          expect(access_token.value).to eq("tok-1")
+          expect(build_access_token(cache: cache).value).to eq("tok-1")
+
+          Timecop.travel(Time.now + 3600 - described_class::EXPIRY_MARGIN + 1)
+          expect(access_token.value).to eq("tok-2")
+          expect(build_access_token(cache: cache).value).to eq("tok-2")
+        end
+      end
+    end
+
     it "raises Unauthorized when Zoho rejects the refresh token with a 200" do
       expect(http).to receive(:request).and_return({status: 200, body: {error: "invalid_code"}.to_json})
 

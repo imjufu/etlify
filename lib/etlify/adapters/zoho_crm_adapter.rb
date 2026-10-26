@@ -135,7 +135,15 @@ module Etlify
         raise ArgumentError, "match_value must be provided when crm_id is unknown" if value.empty?
 
         prop = match_property.to_s
-        upsert_records(object_type, [upsert_fields(payload, prop, value)], prop).first
+        path = "/#{object_type}/upsert"
+        ids, response = upsert_records(path, [upsert_fields(payload, prop, value)], prop)
+        return ids.first unless ids.first.nil?
+
+        raise Etlify::ApiError.new(
+          "Zoho upsert succeeded but returned no record id (path=#{path})",
+          status: response[:status],
+          raw: response[:body]
+        )
       end
 
       # @return [Boolean] true when deleted, false when the record does not exist
@@ -156,7 +164,8 @@ module Etlify
       # Zoho answers in input order, so ids are mapped back by position.
       # A failed record raises ValidationFailed: the batch synchronizer then
       # replays the records one by one, which is safe since matching is done
-      # server side.
+      # server side. A record Zoho returned no id for is left out of the
+      # mapping, so only that record is failed by the batch synchronizer.
       # @param inputs [Array<Hash>] each {value:, properties:}
       # @param match_property [String] duplicate check field API name
       # @return [Hash{String => String}] input value (as provided) => record id
@@ -166,6 +175,7 @@ module Etlify
         raise ArgumentError, "inputs must be a non-empty Array" if !inputs.is_a?(Array) || inputs.empty?
 
         prop = match_property.to_s
+        path = "/#{object_type}/upsert"
 
         inputs.each_slice(BATCH_MAX_SIZE).each_with_object({}) do |slice, mapping|
           raw_values = slice.map { |input| fetch_input(input, :value).to_s }
@@ -176,8 +186,8 @@ module Etlify
             upsert_fields(fetch_input(input, :properties) || {}, prop, value)
           end
 
-          ids = upsert_records(object_type, records, prop)
-          raw_values.each_with_index { |raw, index| mapping[raw] = ids[index] }
+          ids, _response = upsert_records(path, records, prop)
+          raw_values.each_with_index { |raw, index| mapping[raw] = ids[index] unless ids[index].nil? }
         end
       end
 
@@ -230,26 +240,20 @@ module Etlify
         raise_for_error!(response, path: path)
       end
 
-      # @return [Array<String>] record ids, in the order of `records`
-      def upsert_records(object_type, records, match_property)
-        path = "/#{object_type}/upsert"
+      # @return [Array(Array<String, nil>, Hash)] record ids in the order of
+      #   `records` (nil where Zoho returned none) and the response
+      def upsert_records(path, records, match_property)
         body = {data: records, duplicate_check_fields: [match_property]}
         response = request(:post, path, body: body)
         raise_for_error!(response, path: path)
 
         entries = record_entries(response)
-        records.each_index.map do |index|
+        ids = records.each_index.map do |index|
           id = entries.dig(index, "details", "id").to_s
-          if id.empty?
-            raise Etlify::ApiError.new(
-              "Zoho upsert succeeded but returned no record id (path=#{path}, index=#{index})",
-              status: response[:status],
-              raw: response[:body]
-            )
-          end
-
-          id
+          id.empty? ? nil : id
         end
+
+        [ids, response]
       end
 
       # The upsert endpoint reads the duplicate check value from the record:

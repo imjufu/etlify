@@ -35,6 +35,21 @@ RSpec.describe Etlify::Adapters::ZohoCrmAdapter do
   end
 
   describe "#initialize" do
+    it "shares the access token through Etlify.config.cache_store by default" do
+      build = lambda do
+        described_class.new(client_id: "client-id", client_secret: "client-secret", refresh_token: "refresh-token",
+          http_client: http)
+      end
+
+      expect(http).to receive(:request).with(:post, "https://accounts.zoho.com/oauth/v2/token", headers: anything,
+        body: anything).once
+      expect(http).to receive(:request).with(:delete, "#{api}/Contacts/42", headers: hash_including(auth), body: nil)
+        .twice.and_return({status: 200, body: {data: [zoho_success("42")]}.to_json})
+
+      build.call.delete!(object_type: "Contacts", crm_id: "42")
+      build.call.delete!(object_type: "Contacts", crm_id: "42")
+    end
+
     it "targets the data center's API and Accounts servers" do
       eu_adapter = described_class.new(
         client_id: "client-id",
@@ -368,18 +383,34 @@ RSpec.describe Etlify::Adapters::ZohoCrmAdapter do
       expect(mapping).to eq({"a@example.com " => "1", "b@example.com" => "2"})
     end
 
-    it "sends at most 100 records per call" do
+    it "sends at most 100 records per call", :aggregate_failures do
       inputs = Array.new(150) { |index| {value: "u#{index}", properties: {}} }
+      sent_refs = []
 
       expect(http).to receive(:request).with(:post, "#{api}/Investors/upsert", headers: anything, body: anything)
         .twice do |_method, _url, body:, **|
           data = JSON.parse(body)["data"]
+          sent_refs << data.map { |record| record["Ref"] }
           {status: 200, body: {data: data.map { |record| zoho_success("id-#{record['Ref']}") }}.to_json}
         end
 
       mapping = adapter.batch_upsert!(object_type: "Investors", inputs: inputs, match_property: "Ref")
 
-      expect(mapping.size).to eq(150)
+      expect(sent_refs).to eq([Array.new(100) { |index| "u#{index}" }, Array.new(50) { |index| "u#{index + 100}" }])
+      expect(mapping).to eq(Array.new(150) { |index| ["u#{index}", "id-u#{index}"] }.to_h)
+    end
+
+    it "leaves out the records Zoho returned no id for" do
+      expect(http).to receive(:request).with(:post, "#{api}/Contacts/upsert", headers: anything, body: anything)
+        .and_return({status: 200, body: {data: [zoho_success("1")]}.to_json})
+
+      mapping = adapter.batch_upsert!(
+        object_type: "Contacts",
+        inputs: [{value: "a@example.com", properties: {}}, {value: "b@example.com", properties: {}}],
+        match_property: "Email"
+      )
+
+      expect(mapping).to eq({"a@example.com" => "1"})
     end
 
     it "raises ValidationFailed when one record fails" do
