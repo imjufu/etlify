@@ -154,11 +154,8 @@ module Etlify
     end
 
     def extract_retry_after(error)
-      if error.respond_to?(:raw) && error.raw.is_a?(String)
-        # HubSpot sometimes includes Retry-After in headers
-        # but we only have the body here; use default
-      end
-      DEFAULT_RETRY_AFTER
+      retry_after = error.retry_after.to_i
+      retry_after.positive? ? retry_after : DEFAULT_RETRY_AFTER
     end
 
     def reenqueue(crm_name, remaining_pairs, wait:)

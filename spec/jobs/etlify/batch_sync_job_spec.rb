@@ -115,6 +115,22 @@ RSpec.describe Etlify::BatchSyncJob do
       expect(jobs.first[:args][0]).to eq("hubspot")
     end
 
+    it "re-enqueues after the delay carried by RateLimited", :aggregate_failures do
+      user = create_user!(index: 1)
+
+      allow_any_instance_of(Etlify::Adapters::NullAdapter)
+        .to receive(:batch_upsert!)
+        .and_raise(Etlify::RateLimited.new("refresh quota", status: 200, retry_after: 60))
+
+      freeze_time do
+        described_class.perform_now("hubspot", ["User", user.id])
+
+        jobs = aj_enqueued_jobs.select { |j| j[:job] == described_class }
+        expect(jobs.size).to eq(1)
+        expect(jobs.first[:at]).to be_within(1).of(60.seconds.from_now.to_f)
+      end
+    end
+
     it "keeps the re-enqueued job's lock alive when pairs are identical",
        :aggregate_failures do
       user1 = create_user!(index: 1)

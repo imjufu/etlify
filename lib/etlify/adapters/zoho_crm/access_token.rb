@@ -26,6 +26,9 @@ module Etlify
         # arrival (refreshed on every call) and a negative cache TTL.
         DEFAULT_EXPIRES_IN = 3600
         REFRESH_QUOTA_EXCEEDED_ERROR = "Access Denied"
+        # The refresh quota is counted over 10 minutes: retrying after
+        # BatchSyncJob's default 10 s would re-enqueue dozens of times.
+        REFRESH_RETRY_AFTER = 60
 
         # @param accounts_url [String] Zoho Accounts server of the data center
         # @param client_id [String]
@@ -147,21 +150,14 @@ module Etlify
           message << ", error=#{code}" if code
           message << ")"
 
-          klass =
-            if status == 429 || code == REFRESH_QUOTA_EXCEEDED_ERROR
-              Etlify::RateLimited
-            elsif status >= 500
-              Etlify::ApiError
-            else
-              Etlify::Unauthorized
-            end
+          options = {status: status, code: code, raw: response[:body]}
 
-          raise klass.new(
-            message,
-            status: status,
-            code: code,
-            raw: response[:body]
-          )
+          if status == 429 || code == REFRESH_QUOTA_EXCEEDED_ERROR
+            raise Etlify::RateLimited.new(message, retry_after: REFRESH_RETRY_AFTER, **options)
+          end
+
+          klass = status >= 500 ? Etlify::ApiError : Etlify::Unauthorized
+          raise klass.new(message, **options)
         end
 
         def parse_json_safe(raw_body)

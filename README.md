@@ -837,7 +837,7 @@ Zoho reports failures **per record**, inside `data`, sometimes behind a 2xx stat
 | other 4xx/5xx | `Etlify::ApiError`       |
 | transport   | `Etlify::TransportError`   |
 
-A failed token refresh raises `Etlify::Unauthorized` (or `RateLimited` / `ApiError` on 429 / 5xx). Exceeding Zoho's quota of 10 refreshes per 10 minutes per refresh token (`{"error": "Access Denied"}` behind a 200) raises `RateLimited`. `delete!` returns `false` when the record does not exist (`INVALID_DATA` or 404), and `batch_delete!` treats such ids as already deleted.
+A failed token refresh raises `Etlify::Unauthorized` (or `RateLimited` / `ApiError` on 429 / 5xx). Exceeding Zoho's quota of 10 refreshes per 10 minutes per refresh token (`{"error": "Access Denied"}` behind a 200) raises `RateLimited`, whose `retry_after` (60 seconds) delays the `BatchSyncJob` re-enqueue. `delete!` returns `false` when the record does not exist (`INVALID_DATA` or 404), and `batch_delete!` treats such ids as already deleted.
 
 ---
 
