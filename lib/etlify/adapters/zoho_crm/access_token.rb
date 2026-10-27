@@ -21,10 +21,10 @@ module Etlify
         # concurrently, burning the refresh quota. With it, the earliest
         # process refreshes and the others find the new token in the cache.
         MAX_REFRESH_OFFSET = 120
-        # Zoho always announces one hour. Used as a floor so a missing or
-        # zero expires_in cannot yield a token stale on arrival (refreshed on
-        # every call) and a negative cache TTL.
-        MIN_EXPIRES_IN = 3600
+        # Zoho always announces one hour. Used only when expires_in is missing
+        # or not positive, so such a response cannot yield a token stale on
+        # arrival (refreshed on every call) and a negative cache TTL.
+        DEFAULT_EXPIRES_IN = 3600
         REFRESH_QUOTA_EXCEEDED_ERROR = "Access Denied"
 
         # @param accounts_url [String] Zoho Accounts server of the data center
@@ -120,13 +120,17 @@ module Etlify
           token = json.is_a?(Hash) ? json["access_token"] : nil
           raise_refresh_error!(response, json) if token.to_s.empty?
 
-          expires_in = [json["expires_in"].to_i, MIN_EXPIRES_IN].max
+          expires_in = json["expires_in"].to_i
+          expires_in = DEFAULT_EXPIRES_IN unless expires_in.positive?
+          # A lifetime shorter than the margin would leave the token stale on
+          # arrival, so the margin never eats more than half of it.
+          lifetime = expires_in - [EXPIRY_MARGIN, expires_in / 2].min
           @token = token
-          @expires_at = Time.now.to_f + expires_in - EXPIRY_MARGIN
+          @expires_at = Time.now.to_f + lifetime
           @cache&.write(
             @cache_key,
             {"token" => @token, "expires_at" => @expires_at},
-            expires_in: expires_in - EXPIRY_MARGIN
+            expires_in: lifetime
           )
         end
 

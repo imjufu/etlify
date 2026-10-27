@@ -105,6 +105,49 @@ RSpec.describe Etlify::Adapters::ZohoCrm::AccessToken do
       end
     end
 
+    context "when expires_in is shorter than an hour" do
+      let(:cache) { ActiveSupport::Cache::MemoryStore.new }
+
+      before { allow(Random).to receive(:rand).with(0..described_class::MAX_REFRESH_OFFSET).and_return(0) }
+
+      it "honors the announced lifetime, minus the margin", :aggregate_failures do
+        expect(http).to receive(:request).twice.and_return(
+          token_response("tok-1", expires_in: 1800),
+          token_response("tok-2", expires_in: 1800)
+        )
+
+        Timecop.freeze(Time.now) do
+          expect(access_token.value).to eq("tok-1")
+
+          Timecop.travel(Time.now + 1800 - described_class::EXPIRY_MARGIN - 1)
+          expect(access_token.value).to eq("tok-1")
+          expect(build_access_token(cache: cache).value).to eq("tok-1")
+
+          Timecop.travel(Time.now + 2)
+          expect(access_token.value).to eq("tok-2")
+          expect(build_access_token(cache: cache).value).to eq("tok-2")
+        end
+      end
+
+      it "keeps half the lifetime when it is shorter than the margin", :aggregate_failures do
+        expect(http).to receive(:request).twice.and_return(
+          token_response("tok-1", expires_in: 120),
+          token_response("tok-2", expires_in: 120)
+        )
+
+        Timecop.freeze(Time.now) do
+          expect(access_token.value).to eq("tok-1")
+
+          Timecop.travel(Time.now + 59)
+          expect(access_token.value).to eq("tok-1")
+          expect(build_access_token(cache: cache).value).to eq("tok-1")
+
+          Timecop.travel(Time.now + 2)
+          expect(access_token.value).to eq("tok-2")
+        end
+      end
+    end
+
     it "raises Unauthorized when Zoho rejects the refresh token with a 200" do
       expect(http).to receive(:request).and_return({status: 200, body: {error: "invalid_code"}.to_json})
 
