@@ -11,18 +11,18 @@ module Etlify
       key = batch_lock_key(job.arguments)
 
       locked = if cache.respond_to?(:write)
-        cache.write(
-          key,
-          "1",
-          expires_in: LOCK_TTL,
-          unless_exist: true
-        )
-      else
-        unless cache.exist?(key)
-          cache.write(key, "1", expires_in: LOCK_TTL)
-          true
-        end
-      end
+                 cache.write(
+                   key,
+                   '1',
+                   expires_in: LOCK_TTL,
+                   unless_exist: true
+                 )
+               else
+                 unless cache.exist?(key)
+                   cache.write(key, '1', expires_in: LOCK_TTL)
+                   true
+                 end
+               end
 
       block.call if locked
     end
@@ -44,10 +44,10 @@ module Etlify
       crm_sym = crm_name.to_sym
 
       pairs = if record_pairs
-        record_pairs.each_slice(2).to_a
-      else
-        discover_stale_records(crm_sym)
-      end
+                record_pairs.each_slice(2).to_a
+              else
+                discover_stale_records(crm_sym)
+              end
 
       process_pairs(pairs, crm_sym)
     end
@@ -128,13 +128,13 @@ module Etlify
         record = model_name.constantize.find_by(id: id)
         next unless record
 
-        Etlify::Synchronizer.call(record, crm_name: crm_name)
-      rescue Etlify::RateLimited => e
-        remaining = pairs[index..]
-        wait = extract_retry_after(e)
-        reenqueue(crm_name, remaining, wait: wait)
-        break
-      rescue => _e
+        result = Etlify::Synchronizer.call(record, crm_name: crm_name)
+
+        if result == :rate_limited
+          reenqueue(crm_name, pairs[index..], wait: DEFAULT_RETRY_AFTER)
+          break
+        end
+      rescue StandardError => _e
         next
       end
     end

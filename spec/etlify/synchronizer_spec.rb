@@ -560,7 +560,7 @@ RSpec.describe Etlify::Synchronizer do
       expect(line.error_count).to eq(3)
     end
 
-    it "raises RateLimited without counting it as a record error", :aggregate_failures do
+    it "returns :rate_limited without counting it as a record error", :aggregate_failures do
       rate_limited_adapter = Object.new
       rate_limited_adapter.define_singleton_method(:upsert!) do |**_|
         raise Etlify::RateLimited.new("rate limited", status: 429)
@@ -581,7 +581,7 @@ RSpec.describe Etlify::Synchronizer do
         last_error: "previous failure"
       )
 
-      expect { described_class.call(user, crm_name: :hubspot) }.to raise_error(Etlify::RateLimited)
+      expect(described_class.call(user, crm_name: :hubspot)).to eq(:rate_limited)
 
       line.reload
       expect(line.error_count).to eq(1)

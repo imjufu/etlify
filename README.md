@@ -216,8 +216,9 @@ When a record fails to sync repeatedly (CRM misconfigured, server error, etc.),
 Etlify increments an `error_count` on its `CrmSynchronisation` row. Once the
 count reaches the configured limit, the record is **excluded** from
 `StaleRecords::Finder` automatic retries. `Etlify::RateLimited` is never
-counted: it is re-raised so the job retries later (`SyncJob` through
-`retry_on`, `BatchSyncJob` by re-enqueuing the remaining records).
+counted: `Etlify::Synchronizer.call` returns `:rate_limited` and the job retries
+later (`SyncJob` through `retry_on`, `BatchSyncJob` by re-enqueuing the
+remaining records).
 
 The default limit is **3**. You can change it globally or per CRM:
 

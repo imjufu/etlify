@@ -98,7 +98,7 @@ module Etlify
     rescue Etlify::RateLimited
       # A quota says nothing about the record: counting it would let a
       # transient incident push records past max_sync_errors for good.
-      raise
+      :rate_limited
     rescue => e
       sync_line.update!(
         last_error: e.message,

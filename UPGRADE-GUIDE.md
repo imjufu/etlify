@@ -7,9 +7,11 @@ adapter, `Etlify::Adapters::ZohoCrmAdapter`, for the Zoho CRM REST API (v8 by
 default).
 
 One behavior change applies to every CRM: `Etlify::Synchronizer` no longer
-records `Etlify::RateLimited` as a record error. It re-raises it, so `SyncJob`
-retries through `retry_on` and `BatchSyncJob` re-enqueues the remaining records,
-and a rate-limit window can no longer push records past `max_sync_errors`.
+records `Etlify::RateLimited` as a record error. It returns `:rate_limited`
+instead of `:error`, so `SyncJob` retries through `retry_on` and `BatchSyncJob`
+re-enqueues the remaining records, and a rate-limit window can no longer push
+records past `max_sync_errors`. Code checking the result of
+`crm_sync!(async: false)` for `:error` should handle `:rate_limited` too.
 
 ---
 

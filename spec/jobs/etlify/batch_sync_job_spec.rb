@@ -179,8 +179,7 @@ RSpec.describe Etlify::BatchSyncJob do
       user = create_user!(index: 1)
       pairs = ["User", user.id]
 
-      allow(Etlify::Synchronizer).to receive(:call)
-        .and_raise(Etlify::RateLimited.new("rate limited", status: 429))
+      allow(Etlify::Synchronizer).to receive(:call).and_return(:rate_limited)
 
       described_class.perform_later("seq_crm", pairs)
       expect(cache.exist?(chunk_lock_key("seq_crm", pairs))).to be(true)
@@ -263,8 +262,7 @@ RSpec.describe Etlify::BatchSyncJob do
       user2 = create_user!(index: 2)
       pairs = ["User", user1.id, "User", user2.id]
 
-      allow(Etlify::Synchronizer).to receive(:call)
-        .and_raise(Etlify::RateLimited.new("rate limited", status: 429))
+      allow(Etlify::Synchronizer).to receive(:call).and_return(:rate_limited)
 
       described_class.perform_now("seq_crm", pairs)
 
