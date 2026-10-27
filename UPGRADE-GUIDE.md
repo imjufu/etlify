@@ -2,9 +2,8 @@
 
 ## 1. Overview
 
-No API change, no configuration change, no migration. This release adds a new
-adapter, `Etlify::Adapters::ZohoCrmAdapter`, for the Zoho CRM REST API (v8 by
-default).
+No configuration change, no migration. This release adds a new adapter,
+`Etlify::Adapters::ZohoCrmAdapter`, for the Zoho CRM REST API (v8 by default).
 
 One behavior change applies to every CRM: `Etlify::Synchronizer` no longer
 records `Etlify::RateLimited` as a record error. It returns `:rate_limited`
@@ -52,13 +51,39 @@ Etlify::CRM.register(
 
 ## 4. Expected behaviour after upgrading
 
-Identical for HubSpot, Airtable and Intercom.
+Unchanged for HubSpot, Airtable and Intercom, except when the CRM answers 429.
+All three adapters raise `Etlify::RateLimited` on it, so the following applies
+to them as well as to Zoho:
+
+- **No more errors recorded for a quota.** A rate-limited sync leaves
+  `last_error` and `error_count` untouched. Expect fewer rows in
+  `CrmSynchronisation.with_error` after a rate-limit window, and no record
+  excluded from `StaleRecords::Finder` because of one.
+- **`crm_sync!(async: false)` returns `:rate_limited`** where it returned
+  `:error`.
+- **`SyncJob` retries.** It used to complete without error, the failure being
+  absorbed by the synchronizer. It now raises `Etlify::RateLimited`, so
+  `retry_on` schedules up to 3 attempts one minute apart. Once they are
+  exhausted, the error reaches your queue backend like any other job failure:
+  expect `RateLimited` failures in its dashboard and error tracker during
+  sustained rate limiting.
+- **`BatchSyncJob` re-enqueues the remaining records** in sequential mode
+  (adapters without batch endpoints) instead of moving on to the next record.
+- **`StaleRecords::BatchSync` in inline mode stops** processing a model's stale
+  records at the first rate-limited one. They are not counted, and the next run
+  picks them up.
 
 ---
 
 ## 5. Backward compatibility
 
-- No public API change, no DSL change, no migration.
+- No DSL change, no migration.
+- `Etlify::Synchronizer.call` and `crm_sync!(async: false)` can return a new
+  value, `:rate_limited`. Code that branches on the result, typically
+  `result == :error`, should handle it.
+- `SyncJob` can now fail with `Etlify::RateLimited` where it used to succeed.
+- `Etlify::RateLimited.new` accepts an optional `retry_after:` (seconds). The
+  existing signature still works.
 - The new adapter is loaded with the others but does nothing until registered.
 
 ---
