@@ -18,19 +18,19 @@ module Etlify
 
       # Prefer atomic write-if-absent when cache supports it.
       locked = if cache.respond_to?(:write)
-                 cache.write(
-                   key,
-                   '1',
-                   expires_in: ENQUEUE_LOCK_TTL,
-                   unless_exist: true
-                 )
-               else
-                 # Fallback: check then write (non-atomic, acceptable for tests).
-                 unless cache.exist?(key)
-                   cache.write(key, '1', expires_in: ENQUEUE_LOCK_TTL)
-                   true
-                 end
-               end
+        cache.write(
+          key,
+          "1",
+          expires_in: ENQUEUE_LOCK_TTL,
+          unless_exist: true
+        )
+      else
+        # Fallback: check then write (non-atomic, acceptable for tests).
+        unless cache.exist?(key)
+          cache.write(key, "1", expires_in: ENQUEUE_LOCK_TTL)
+          true
+        end
+      end
 
       block.call if locked
     end
@@ -53,7 +53,7 @@ module Etlify
       result = Etlify::Synchronizer.call(record, crm_name: crm_name.to_sym)
 
       # Raised so retry_on schedules the next attempt.
-      raise Etlify::RateLimited.new('CRM rate limit reached', status: 429) if result == :rate_limited
+      raise Etlify::RateLimited.new("CRM rate limit reached", status: 429) if result == :rate_limited
     end
 
     private

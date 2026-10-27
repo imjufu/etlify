@@ -11,18 +11,18 @@ module Etlify
       key = batch_lock_key(job.arguments)
 
       locked = if cache.respond_to?(:write)
-                 cache.write(
-                   key,
-                   '1',
-                   expires_in: LOCK_TTL,
-                   unless_exist: true
-                 )
-               else
-                 unless cache.exist?(key)
-                   cache.write(key, '1', expires_in: LOCK_TTL)
-                   true
-                 end
-               end
+        cache.write(
+          key,
+          "1",
+          expires_in: LOCK_TTL,
+          unless_exist: true
+        )
+      else
+        unless cache.exist?(key)
+          cache.write(key, "1", expires_in: LOCK_TTL)
+          true
+        end
+      end
 
       block.call if locked
     end
@@ -44,10 +44,10 @@ module Etlify
       crm_sym = crm_name.to_sym
 
       pairs = if record_pairs
-                record_pairs.each_slice(2).to_a
-              else
-                discover_stale_records(crm_sym)
-              end
+        record_pairs.each_slice(2).to_a
+      else
+        discover_stale_records(crm_sym)
+      end
 
       process_pairs(pairs, crm_sym)
     end
@@ -134,7 +134,7 @@ module Etlify
           reenqueue(crm_name, pairs[index..], wait: DEFAULT_RETRY_AFTER)
           break
         end
-      rescue StandardError => _e
+      rescue => _e
         next
       end
     end
